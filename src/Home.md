@@ -1,0 +1,175 @@
+# Basic Setup
+
+## Docker Image
+
+| Tag       | Description          |
+| --------- | -------------------- |
+| `latest`  | Stable release       |
+| `nightly` | Experimental release |
+| `vx.y.z`  | Stable release       |
+
+- Proxy `ghcr.io/sudosu404/tailnet-providers:<tag>`
+- Frontend `ghcr.io/sudosu404/tailnet-providers-frontend:<tag>`
+
+**Current version**
+
+![GitHub Release](https://img.shields.io/github/v/release/sudosu404/tailnet-providers?style=flat-square)
+
+## Secure your containers
+
+> [!NOTE]
+> Tailnet will work without mapping ports to the host.
+
+Replace every `ports` section with `expose` section in your docker-compose.yml file.
+
+Doing this will make your host has only **one** exposed service, which is Tailnet.
+
+```yaml
+# Before
+ports:
+  - 8080:80
+  - 4433:443
+
+# After
+expose:
+  - 80
+  - 443
+```
+
+## Environment variables
+
+### Core
+
+> [!NOTE]
+> Also works with old prefix `GOPROXY_` or without prefix like `API_USER`
+
+| Environment Variable   | Description                                 | Default          | Values        |
+| ---------------------- | ------------------------------------------- | ---------------- | ------------- |
+| `GODOXY_FRONTEND_PORT` | Frontend listening port                     | `3000`           | integer       |
+| `GODOXY_HTTP_ADDR`     | HTTP server listening address               | `:80`            | `[host]:port` |
+| `GODOXY_HTTPS_ADDR`    | HTTPS server listening address (if enabled) | `:443`           | `[host]:port` |
+| `GODOXY_API_ADDR`      | API server listening address                | `127.0.0.1:8888` | `[host]:port` |
+| `GODOXY_HTTP3_ENABLED` | Enable HTTP/3                               | `true`           | boolean       |
+| `GODOXY_DEBUG`         | Enable debug behaviors and logging          | `false`          | boolean       |
+
+### Authentication
+
+#### General
+
+> [!DANGER]
+>
+> If you desire to use WebUI HTTP Only, set `GODOXY_API_JWT_SECURE` to `false`
+>
+> **Not recommended**
+
+#### Common
+
+| Environment Variable       | Description                      | Default                                                           | Values                                            |
+| -------------------------- | -------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------- |
+| `GODOXY_API_JWT_SECURE`    | Secure flag for JWT cookie       | `true`                                                            | boolean                                           |
+| `GODOXY_API_JWT_SECRET`    | Base64 JWT secret for api server | random **(you will have to login again after restarting Tailnet)** | string                                            |
+| `GODOXY_API_JWT_TOKEN_TTL` | JWT Time-to-live                 | `24h`                                                             | [duration](https://pkg.go.dev/time#ParseDuration) |
+
+#### User Password Auth
+
+| Environment Variable  | Description          | Default    | Values |
+| --------------------- | -------------------- | ---------- | ------ |
+| `GODOXY_API_USER`     | WebUI login username | `admin`    | string |
+| `GODOXY_API_PASSWORD` | WebUI login password | `password` | string |
+
+#### OIDC
+
+| Environment Variable         | Description                                                | Default                       |
+| ---------------------------- | ---------------------------------------------------------- | ----------------------------- |
+| `GODOXY_OIDC_ISSUER_URL`     | OIDC issuer URL                                            | empty                         |
+| `GODOXY_OIDC_CLIENT_ID`      | OIDC client ID                                             | empty                         |
+| `GODOXY_OIDC_CLIENT_SECRET`  | OIDC client secret                                         | empty                         |
+| `GODOXY_OIDC_ALLOWED_USERS`  | OIDC allowed users (optional when `ALLOWED_GROUPS` is set) | empty                         |
+| `GODOXY_OIDC_ALLOWED_GROUPS` | OIDC allowed groups (optional when `ALLOWED_USERS` is set) | empty                         |
+| `GODOXY_OIDC_SCOPES`         | OIDC scopes                                                | `openid,profile,email,groups` |
+
+##### Scopes
+
+| Scope            | Description                            | Optional? |
+| ---------------- | -------------------------------------- | --------- |
+| `openid`         | OpenID Connect scope                   | No        |
+| `profile`        | User profile scope                     | No        |
+| `email`          | User email scope                       | Yes       |
+| `groups`         | User groups scope                      | Yes       |
+| `offline_access` | Offline access scope for refresh token | Yes       |
+
+> [!NOTE]
+>
+> You will have to add this "Allowed Callback URL" in your OIDC provider
+>
+> `https://*.yourdomain.com/auth/callback` (wildcard) or `https:\/\/([^\.]+)\.yourdomain\.com\/auth\/callback` (regex)
+
+###### Authentik specific
+
+- Set Signing Key to "authentik Self-signed Certificate"
+- Set Encryption Key to None
+- Set Issuer mode to "Each provider has a different issuer, based on the application slug" if not already
+- Add scope `authentik default OAuth Mapping: OpenID 'offline_access'`
+
+##### Example
+
+![Image](images/oidc/pocket-id-1.png)
+
+![Image](images/oidc/pocket-id-2.png)
+
+Add these to `.env`:
+
+- `GODOXY_OIDC_ISSUER_URL` IdP's base URL
+  - `https://id.domain.com` (Pocket ID)
+  - `https://auth.domain.com/application/o/<slug>/` (Authentik)
+- `GODOXY_OIDC_CLIENT_ID` Client ID
+- `GODOXY_OIDC_CLIENT_SECRET` Client secret
+- `GODOXY_OIDC_ALLOWED_USERS` Comma separated list of allowed users
+- `GODOXY_OIDC_ALLOWED_GROUPS` Comma separated list of allowed groups
+
+> [!NOTE]
+>
+> To enable OIDC for specific app, it's just two lines in docker compose:
+>
+> ```yaml
+> services:
+>   your_app:
+>     ...
+>     labels:
+>       proxy.#1.middlewares.oidc:
+> ```
+>
+> Checkout [OIDC Middleware](Middlewares#OIDC) for customizing OIDC per app.
+
+### Metrics
+
+| Environment Variable             | Description                        | Default | Values  |
+| -------------------------------- | ---------------------------------- | ------- | ------- |
+| `GODOXY_METRICS_DISABLE_CPU`     | Disable cpu usage collection       | `false` | boolean |
+| `GODOXY_METRICS_DISABLE_MEMORY`  | Disable memory usage collection    | `false` | boolean |
+| `GODOXY_METRICS_DISABLE_DISK`    | Disable disk usage, I/O collection | `false` | boolean |
+| `GODOXY_METRICS_DISABLE_NETWORK` | Disable network I/O collection     | `false` | boolean |
+| `GODOXY_METRICS_DISABLE_SENSORS` | Disable sensors info collection    | `false` | boolean |
+
+## Behaviors
+
+**Default URL: `<container_name>.yourdomain.com`**
+
+> [!NOTE]
+>
+> All containers are proxied by default, except any of the following is true:
+>
+> - label `proxy.exclude` is set to **true**
+> - Tailnet **IS NOT** explicit enabled for container, but it is either
+>   - from a provider in **explicit only mode** (provider name with exclamation mark **`!`** suffix)
+>   - **or** detected as a backend service (e.g. headless browsers, databases, etc.)
+> - container doesn't have any exposed port
+> - container name has prefix `buildx_`
+> - `alias` with prefix `x-` or suffix `-old`
+
+To explicitly enable **Tailnet** for a container:
+
+- **Tailnet < v0.9** - set label `proxy.aliases`
+- **Tailnet >= v0.9** - set any label starting with `proxy.`
+
+
